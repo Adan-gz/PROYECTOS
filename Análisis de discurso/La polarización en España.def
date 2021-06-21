@@ -4,34 +4,496 @@ You can use the [editor on GitHub](https://github.com/Adan-gz/Proyectos/edit/mai
 
 Whenever you commit to this repository, GitHub Pages will run [Jekyll](https://jekyllrb.com/) to rebuild the pages in your site, from the content in your Markdown files.
 
-### Markdown
+## La Polarización en España: el enfrentamiento entre el PP y el PSOE
+#### Romén Adán González
 
-Markdown is a lightweight and easy-to-use syntax for styling your writing. It includes conventions for
 
-```markdown
-Syntax highlighted code block
-
-# Header 1
-## Header 2
-### Header 3
-
-- Bulleted
-- List
-
-1. Numbered
-2. List
-
-**Bold** and _Italic_ and `Code` text
-
-[Link](url) and ![Image](src)
+```{r}
+require(tidyverse)
+require(quanteda)
+require(syuzhet)
 ```
 
-For more details see [GitHub Flavored Markdown](https://guides.github.com/features/mastering-markdown/).
 
-### Jekyll Themes
+### Introducción
 
-Your Pages site will use the layout and styles from the Jekyll theme you have selected in your [repository settings](https://github.com/Adan-gz/Proyectos/settings/pages). The name of this theme is saved in the Jekyll `_config.yml` configuration file.
+Uno de los temas centrales en la Ciencia Política de la última década es la polarización ideológica y afectiva. Numerosos estudios han identificado tendencias crecientes en ambas en numerosos países, principalmente occidentales. Precisamente, España se encuentra en el grupo con mayores niveles de polarización, no solo en el eje ideológico izquierda-derecha o en términos afectivos, sino también en el eje territorial. Si bien a día de hoy lo que sabemos sobre sus potenciales consecuencias corrosivas (o positivas) apenas trasciende de la argumentación teórica, dada la escasez de evidencia empírica, identificar la existencia de este fenómeno es el primer paso fundamental para poder indagar en sus efectos.
 
-### Support or Contact
+En este trabajo hemos querido aportar a esta línea de investigación con un enfoque distinto al más común análisis de Opínión Pública. Hemos descargado casi todas las intervenciones de los representantes del PP y del PSOE en los debates de investidura de las dos últimas décadas, y en las mociones de censura de 2017 y 2018. Esto incluye los discursos de: 2004, 2008, 2011, 2016, 2017, 2018, 2019 y 2020. Por tanto, tenemos un total de 16 discursos para analizar, si bien, en vez de aplicar técnicas cualitativas para el análisis del discurso, emplearemos dos técnicas alternativas para automatizar la detección de los niveles de polarización. 
 
-Having trouble with Pages? Check out our [documentation](https://docs.github.com/categories/github-pages-basics/) or [contact support](https://support.github.com/contact) and we’ll help you sort it out.
+Por un lado, aplicaremos el algoritmo de procesamiento natural de la librería _syuzhet_ y, por otro, recurriremos al diccionario *afinn*. Con el segundo clasificaremos los sentimientos (negativos y positivos) de cada uno de los discursos, mientras que con el primero además de realizar esto, también podremos indagar en las emociones presentes (enfado, tristeza, alegría, etc.). Recurrimos a dos técnicas alternativas y no a solamente una  debido a que estos métodos están en proceso de desarrollo y mejora, por lo que sus resultados pueden ser diferentes. Por ello, consideramos que lo fundamental es captar las tendencias y ver si es la misma indistintamente de la técnica empleada.
+
+Así pues, esperamos encontrar que el nivel de negatividad -polarización- se halla incrementado en los discursos de ambos partidos con el avance de los años. Lo mismo esperamos ver en el caso de las emociones: mientras las positivas decaen, las negativas crecen en relevancia. 
+
+Finalmente, y debido a que el último debate de investidura se remonta a principios de 2020, en la última sección del trabajo acudiremos a Twitter para indagar en el contexto político actual, con el fin de analizar la polarización hacia los dos partidos tradicionales en tiempos de pandemia. Este análisis entrelazado servirá para mostrarnos dos fotografías: por un lado, la polarización por parte de los actores políticos, y, por otro, su repercusión en la Opinión Pública a través de las redes sociales. 
+
+
+#### Preparación de los datos
+
+Empezando por el análisis de discursos, a continuación explicamos brevemente los pasos seguidos. Hemos abiertos todos los discursos que teníamos guardado en varios .txt y los ubicamos en una lista sobre la cual trabajar. En primer lugar, aplicamos a cada discurso el algoritmo _nrc_ de syuzhet. En segundo lugar, cruzamos el diccionario afinn con el corpus de cada discurso. En un primer momento pensamos utilizar como indicador de sentimiento la diferencia entre positivo y negativo. Sin embargo, esto presentaba una evidente desventaja: dado que no es una medida estandarizada es muy difícil comparar los discursos entre sí. Por ello, optamos por calcular el porcentaje de negatividad de cada discurso. De esta forma, un discurso con más de un 50% en este índice nos indicaría que el tono del mismo es claramente negativo. Esperamos ver que el porcentaje de negatividad se incremente con el paso de los años. 
+
+Este es el código aplicado para extraer los sentimientos con la librería syuzhet:
+
+```{r}
+
+# Cargamos todos los discursos de una vez
+df_list <- list()
+data.sources <- list.files(pattern= "*.txt")
+df_list <- sapply(data.sources, readr::read_file )
+# Renombramos objetos de la lista
+names(df_list) <- c("PP_2004","PP_2008","PP_2011","PP_2016",
+                    "PP_2017","PP_2018","PP_2019","PP_2020",
+                    "PSOE_2004","PSOE_2008","PSOE_2011","PSOE_2016",
+                    "PSOE_2017","PSOE_2018","PSOE_2019","PSOE_2020")
+
+#############
+## Syuzhet ##
+#############
+# Calculamos el sentimiento de cada discurso de investidura
+## Syuzhet
+df_sent_syuzhet <- lapply(df_list, get_nrc_sentiment, language = "spanish")
+# Le añadimos el nombre del partido y fecha a cada tibble
+for (i in 1:length(df_sent_syuzhet)) {
+  
+  df_sent_syuzhet[[i]] <- df_sent_syuzhet[[i]] %>% 
+    mutate( fecha = names(df_sent_syuzhet)[i] ) %>% 
+    as_tibble()
+  
+}
+# Unimos todos los discursos y 
+# calculamos el porcentaje de negatividad
+df_syuzhet_completo <- bind_rows(df_sent_syuzhet) %>% 
+  mutate( negatividad = negative/(positive + negative ),
+          dic = "syuzhet") %>% # fijamos con qué algoritmo se calcula
+   # y ponemos por separado el partido y la fecha
+  separate(fecha, into = c("partido","fecha"), sep = "_" ) %>% 
+  select( dic, fecha, partido, negatividad, everything() )
+```
+
+
+A modo de ejemplo, este es el *tibble* de resultados con observaciones para los años de 2004 y 2016, el porcentaje de negatividad y las puntuaciones de dos de las ocho emociones.
+
+```{r}
+require(kableExtra)
+kableExtra::kable( caption = "Tabla 1. Ejemplo de resultados con syuzhet", 
+  digits = 2,
+  df_syuzhet_completo %>% 
+    filter( fecha %in% c(2004,2016) ) %>% 
+    select(Diccionario = dic, "Año" = fecha,
+          Partido = partido, Negatividad = negatividad,
+          Enfado = anger, "Alegría" = joy) %>% 
+    mutate( Negatividad = paste( round(as.numeric(Negatividad),3)*100,
+                                  "%" ) ),
+  align = "lccccc",format = "html" 
+) %>% 
+  kable_classic(full_width = F, html_font = "Cambria" )
+```
+
+Seguidamente, calculamos el nivel de polarización pero con el diccionario afinn. Para ello, y dado que no se puede aplicar directamente el diccionario sobre un vector carácter, convertimos los discursos en un corpus.
+
+
+```{r}
+###########
+## AFINN ##
+###########
+### Diccionario afinn
+afinn <- read.csv("lexico_afinn.en.es.csv", 
+                  stringsAsFactors = F, fileEncoding = "latin1")  
+pos.words <- afinn$Palabra[afinn$Puntuacion>0]  
+neg.words <- afinn$Palabra[afinn$Puntuacion<0]
+mydict <- dictionary(list(negative = neg.words, 
+                          positive = pos.words))
+## necesitamos corpus en vez de vector carácter
+df_corpus <- lapply(df_list,corpus)
+# pasamos el diccionario a cada discurso
+df_dic <- lapply(df_corpus, dfm, dictionary = mydict)
+# añadimos fecha y partido y pasamos a tibble
+for (i in 1:length(df_dic)) {
+  
+  df_dic[[i]] <- df_dic[[i]] %>% as_tibble() %>% 
+    mutate( fecha = names(df_dic)[i] ) %>% 
+    as_tibble()
+}
+# juntamos todos los dicursos
+# y calculamos la negatividad
+df_afinn_completo <- bind_rows(df_dic) %>% 
+  mutate( negatividad = negative/(positive + negative ),
+          dic = "afinn") %>%
+  separate(fecha, into = c("partido","fecha"), sep = "_" ) %>% 
+  select( dic, fecha, partido, negatividad, positive, negative )
+  
+
+```
+
+Este es un ejemplo de resultados con afinn para los mismos años mencionados arriba:
+
+```{r}
+kableExtra::kable(caption = "Tabla 2. Ejemplo de resultados con afinn", 
+  digits = 2,
+  df_afinn_completo %>% 
+   filter( fecha %in% c(2004,2016) ) %>% 
+   select(Diccionario = dic, "Año" = fecha,
+         Partido = partido, Negatividad = negatividad) %>% 
+    mutate( Negatividad = paste( round(as.numeric(Negatividad),3)*100,
+                                  "%" ) ),
+  align = "lrrrrr",format = "html" 
+) %>% 
+  kable_classic(full_width = F, html_font = "Cambria" )
+```
+
+
+### La emergencia de sentimientos negativos
+
+Los resultados obtenidos pueden verse en este primer gráfico y, sin duda, tienen muchos aspectos a comentar.
+
+Lo primero, es que tal y como avanzamos el porcentaje de negatividad en los discursos del PP y del PSOE difiere según el método empleado. Esto es algo relevante dado que nos muestra cómo, en lo referido a análisis de sentimiento, no es aconsejable extraer conclusiones categóricas cuando solo se usa un método, ya que quizá el resultado no sea independiente de la técnica empleada. Ahora bien, esto no quiere decir que no nos aporte información valiosa. Existe una clara analogía: en periodo electoral el porcentaje concreto de voto que cada encuesta estima a un partido no es hasta cierto punto lo relevante, la clave se encuentra en las tendencias. Y, en este análisis de discurso, los métodos difieren en el valor absoluto de polarización, pero no dejan lugar a duda respecto a las tendencias.
+
+```{r}
+df_afinn_completo %>% 
+  bind_rows(df_syuzhet_completo) %>% 
+  select(fecha, dic, partido,  
+         positive, negative) %>% 
+  # añadimos la negatividad global de los discursos
+  pivot_wider(names_from = partido,
+              values_from = positive:negative) %>% 
+  mutate( negatividad_total = 
+            (negative_PP + negative_PSOE) / 
+            (negative_PP + negative_PSOE +
+               positive_PP + positive_PSOE) ) %>% 
+  select(fecha, dic, negatividad_total) %>% 
+  mutate( partido = "Global") %>% 
+  full_join( bind_rows(df_afinn_completo,
+                       df_syuzhet_completo) ) %>% 
+  # hacemos el gráfico
+
+  ggplot(aes(x = fecha, group = dic, col = partido, 
+             linetype = dic)  )+
+  theme_minimal()+
+  geom_point( aes(y =  negatividad), size = 3, show.legend = FALSE  )+
+  geom_line( aes(y =  negatividad), size = 1 )+
+  geom_point( aes(y =  negatividad_total), size = 3, show.legend = FALSE  )+
+  geom_line( aes(y =  negatividad_total), size = 1 )+
+  geom_hline(yintercept = 0.5, linetype = 2 )+
+    
+  
+  coord_cartesian(ylim = c(0.3,0.7))+
+  scale_y_continuous(breaks = seq(0, 1, .1), 
+                     labels = scales::percent_format(accuracy = 1))+
+  scale_colour_manual(values = c("gray50","deepskyblue3","red3"))+
+  scale_x_discrete( labels = c("2004","08","11","16","17","18","19","2020") )+
+
+  
+  labs(linetype = "Método", y = "", x = "",
+       title = "La polarización en los discursos de investidura y las mociones de censura",
+       subtitle = "Porcentaje de sentimiento negativo sobre el total de cada discurso:",
+       caption = "Nota: Por encima de un 50% indica un discurso mayoritariamente negativo.")+
+ 
+   theme(plot.caption = element_text(hjust = 0),
+        #legend.position = c(0.17,1.1),
+        legend.position = "top", #c(0.5,.8),
+        legend.direction = "horizontal",
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        panel.grid.major.y = element_blank(),
+        #axis.text.x = element_text(size = 8),
+        plot.title = element_text(face = "bold",size = 12.5),
+        strip.text = element_text(face = "bold", size = 10))+
+  guides( color = FALSE )+
+  facet_wrap(~partido)
+```
+
+Así pues, lo segundo a destacar es la tendencia global. Si la evidencia en Ciencia Política que utiliza datos de encuesta para captar la polarización ha reflejado un claro ascenso de ésta en los últimos tiempos, esto también queda patente en los discursos de los dos principales partidos de la democracia española. Los discursos de investidura han incrementado casi sistemáticamente su nivel de polarización. Antes de 2011, en la primera década del siglo XXI, los discursos eran en proporción más positivos que negativos, sin embargo ya había una tendencia a la polarización considerable. El "esplendor" se produce en 2017 con la moción de censura al Gobierno de Rajoy y, en los años posteriores, aunque decae, se mantiene en altos niveles. Con el método afinn, desde 2011 los discursos de ambos partidos son mayoritariamente negativos. Con syuzhet, siguen siendo positivos, pero el porcentaje está prácticamente en el 50%. La polarización es un hecho.
+
+No obstante, las diferencias entre partidos son notables. En el caso del PSOE, ambos métodos detectan una subida continuada de la negatividad hasta 2017, Y, si bien parece que en el (casi) último lustro esto se ha revertido ligeramente, el nivel de polarización es considerable. Por otro lado, a excepción de 2011, parece que el PP ha tenido sistemáticamente discursos más polarizadores que el PSOE y, al menos para el margen de temporal que aquí tenemos, ya en 2004 y 2008 su intervención fue más negativa, liderando el auge de la polarización. Años que posteriormente fueron descritos como los de la [crispación](https://www.fundacionalternativas.org/laboratorio/libros-e-informes/ide/informe-sobre-la-democracia-en-espana-2007-la-estrategia-de-la-crispacion). Es sorprendente cómo desde 2017, a raíz de la primera moción a Rajoy, el porcentaje de discurso negativo roza y supera el 65% según el método syuzhet en el caso de los populares. 
+
+
+
+
+### Las emociones: misma tendencia
+
+Otra forma de indagar en la polarización es desgranar por las emociones presentes en los discursos. El algoritmo de syuzhet no sólo aporta información sobre el grado de postitividad y negatividad, sino también sobre la presencia de diversas emociones positivas y negativas: enfado, disgusto, miedo, tristeza, júbilo, sorpresa, expectación y confianza. Hemos calculado el porcentaje de presencia en el discurso de cada una, así como agrupado entre las positivas y negativas para ver la evolución global.
+
+En este caso, aunque las variaciones en puntos porcentuales son menores que en los sentimientos, las tendencias muestran el mismo patrón. En las dos últimas décadas, a nivel global, la emocionalidad de los discursos ha pasado de estar caracterizada por lo positivo, para revertir la situación y situarse en 2020 en un punto medio. En otras palabras, las emociones negativas han florecido en los últimos veinte años.
+
+Si diferenciamos entre partidos hay al menos dos cuestiones a destacar. En primer lugar, la caída en global la positivivad es fundamentalmente producto de la caída de la confianza. Esto es destacable dado que la polarización tiende a erosionar la confianza entre los partidos y, si cala en la sociedad, también entre los ciudadanos hacia los partidos y entre sí mismos. Aquí vemos reflejado cómo palabras que expresen confianza han ido desapareciendo de los discursos de los dos principales partidos de España. No obstante, es cierto que el PSOE parece tener mayores porcentajes de discurso positivo que el PP.
+
+Por otro lado, y a diferencia de lo recién comentado, el incremento de las emociones negativas en los discursos es expansivo. No se concentra exclusivamente en una, sino que se incrementa en todas las captadas por el algoritmo. E, importante, si bien el PP presentaba mayores porcentajes de emociones negativas, en los últimos años se ha equiparado entre ambos partidos.
+
+```{r}
+
+df_syuzhet_emociones <- df_syuzhet_completo  %>% 
+  pivot_longer( anger:trust ) %>% 
+  #filter( name != "anticipation" ) %>% 
+  mutate( 
+    sentimiento = ifelse( name %in% c("anger","disgust","fear","sadness"),
+                          "Negativo","Positivo"),
+    name = factor( name,
+                          levels = c("anger","disgust","fear","sadness",
+                                     "joy","surprise","anticipation","trust"),
+                          labels = c("enfado","disgusto","miedo","tristeza",
+                                     "alegría","sorpresa","expectación",
+                                     "confianza")) ) %>% 
+  group_by(fecha, partido) %>% 
+  mutate( p_emocion = value/sum(value)   ) %>% 
+  ungroup()  %>% 
+  select( dic, fecha, partido, name:ncol(.) )
+
+plot_emociones <- df_syuzhet_emociones  %>% 
+  mutate( sentimiento = fct_relevel(sentimiento, "Positivo") ) %>% 
+  ggplot(aes( fecha, p_emocion, col = name ))+
+  theme_minimal()+
+  geom_point( size = 2.5)+
+  geom_line(aes(group = name), size = 1)+
+  
+  scale_color_brewer(palette = "RdBu")+
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1))+
+  scale_x_discrete( labels = c("2004","08","11","16","17","18","19","2020") )+
+  
+  labs(col = "Emoción", y = "", x = "",
+       title = "",
+       subtitle = "")+
+  
+  facet_wrap(~ sentimiento+partido, scales = "free_y")+
+  theme( 
+    plot.title = element_text(face = "bold",size = 12.5),
+    plot.caption = element_text(hjust = 0),
+    strip.text = element_text(face = "bold", size = 10),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    plot.margin=unit(c(-0.5,1,1,1), "cm"))
+
+
+plot_emociones_global <- df_syuzhet_emociones %>% 
+  select(fecha, sentimiento, name, value) %>% 
+  group_by(fecha) %>%
+  mutate( total_sentimiento = sum(value) ) %>% 
+  ungroup() %>% 
+  group_by(fecha, sentimiento) %>%
+  transmute( p_global = sum(value)/total_sentimiento,
+           partido = "Global") %>% 
+  ungroup() %>% 
+  distinct() %>% 
+
+  ggplot(aes( fecha ))+
+  theme_minimal()+
+  geom_point( aes(y = p_global), size = 2.5, col = "gray50")+
+  geom_line(aes(y = p_global, group = partido), size = 1,col = "gray50")+
+  
+  scale_color_brewer(palette = "Spectral")+
+  scale_y_continuous(
+    breaks = seq(.4,.6,.05),
+    labels = scales::percent_format(accuracy = 1))+
+  scale_x_discrete( labels = c("2004","08","11","16","17","18","19","2020") )+
+  
+  labs(col = "Emoción", y = "", x = "",
+       title = "Las emociones en los discursos",
+       subtitle = "Porcentaje de cada emoción:")+
+  
+  
+  facet_wrap(~ partido+ sentimiento)+
+  theme( 
+    plot.title = element_text(face = "bold",size = 12.5),
+    plot.caption = element_text(hjust = 0),
+    strip.text = element_text(face = "bold", size = 10),
+   panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.minor.y = element_blank(),
+   plot.margin=unit(c(1,1,-0.5,1), "cm"))
+
+gridExtra::grid.arrange(
+  plot_emociones_global,
+  plot_emociones,
+  heights=unit(c(5.1,9.5), c("cm", "cm"))
+)
+
+```
+
+#### Sí, la polarización es un hecho 
+
+En definitva, estos resultados, usando tanto syuzhet como afinn y centrándonos en sentimientos o emociones, vienen a afianzar uno de los fenómenos con más fama en la (ciencia) política española: el aumento de la polarización. Ésta suele ser medida indirectamente a través de las respuestas de los ciudadanos a las encuestas, pudiendo captar tanto la polarización ideológica como afectiva. La primera, también, es a veces medida a través de los programas electorales de los partidos. Aquí hemos querido indagar en una alternativa: el análisis de los discursos de investidura y de las mociones de censura, pero, en vez de aplicar métodos cualitativos, hemos recurrido a técnicas de procesamiento de lenguaje natural. Si bien se pierden matices respecto a los métodos cuali, si permite analizar con mayor eficiencia largos periodos de tiempo y extensos discursos. Y, más importante aún, se muestra que es un método fiable dado que corrobora un fenómeno demostrado por la evidencia politológica. La polarización está incrementado en todas sus vertientes, y sus consecuencias más nocivas están por descubrirse.
+
+
+
+### Los topics de los discursos del PP: 2016 vs 2020
+
+Tras haber comprobado el papel relevante del Partido Popular en el aumento de la polarización, analizamos los topics de los discursos de investidura de 2016 y 2020 para indagar en si se ha producido un cambio en la temática que tratan sus discursos, o si es una cuesitón de endurecimiento del tono.
+
+Para ello empleamos una técnica de procesamiento de lenguaje natural llamada Latent Dirichlet Allocation (LDA), que identifica aquellas palabras más frecuentes y las agrupa en función de que aparezcan conjuntamente en el texto. De esta forma podemos extraer las principales temáticas tratadas. Además, permite identificar conjuntos de palabras, a modo de ejemplo, en vez de captar "gente", puede identificar "voz_gente", ayudando a identificar los matices de significados. 
+
+Como solo son dos discursos, podríamos leerlos íntegramente y proponer el número de temas que trata cada uno. Sin embargo, como la lógica de este trabajo es en parte mostrar que podemos confiar en estas técnicas hasta cierto punto, recurrimos a otro algoritmo que "recomienda" el número topics presentes. 
+
+
+```{r}
+
+#require(quanteda)	
+require(topicmodels)
+require(ldatuning)	
+
+ # nos quedamos con los discursos del PP
+df_PP <- df_list[c("PP_2016","PP_2020")]
+# creamos el corpus y tokenizamos
+df_PP_corpus <- lapply(df_PP, corpus)	
+ # hemos quitado manualmente multitud de palabras,
+ # para ello tokenizábamos e inspeccionábamos qué
+ # palabras aparecían con mucha frecuencias pero 
+ # no nos estaban apartando información valiosa
+df_PP_tokens <- lapply(df_PP_corpus, function(x){
+ 
+    tokens(x , remove_punct = T,remove_numbers = T,	
+         remove_url =T, remove_symbols = T) %>%	
+    tokens_remove(stopwords("es")) %>% 
+    tokens_remove(    
+      c( "si","usted","hacer",
+         "aquí","cosas","año",
+         "años","parte","lugar","dos",
+         "creo","hecho","puede","ser",
+         "muchas","bien","hace","voy",
+         "decir","así","dicho","luego",
+         "largo","quiero","menos",
+         "va","cómo","después",
+         "ahora","claro","tener","unas","digo",
+         "cada","pues","van","sé") ) %>%	
+    tokens_ngrams(n=1:3) %>%	 #\ longitud de una a tres ngramas
+    dfm()	%>% 
+    dfm_trim(min_termfreq = 2)# para que la palabras al 
+                              # menos aparezcan dos veces
+})
+
+# así comprobábamos qué palabras poco relevantes
+# estaban apareciendo demasiado
+#df_PP_tokens[[1]] %>% as_tibble() %>% 
+#  mutate( doc_id = "2014" ) %>% 
+#  pivot_longer(2:ncol(.)) %>% 
+#  slice_max(order_by = value, n = 40) %>% view()
+#
+#df_PP_tokens[[2]] %>% as_tibble() %>% 
+#  mutate( doc_id = "2014" ) %>% 
+#  pivot_longer(2:ncol(.)) %>% 
+#  slice_max(order_by = value, n = 40) %>% view()
+
+```
+
+En el caso de 2016 el "consenso" entre algoritmos parece estar en que hallan 4 temas, es donde se minimiza y maximiza respectivamente los algoritmos de forma conjunta en niveles adecuados. 
+
+
+```{r fig.height= 2, results= 'hide'}
+
+# aplicamos el algoritmo de topicmodels que nos 
+# indica el número de topics óptimo
+n_topics <- lapply(df_PP_tokens, function(x){
+   topics <- FindTopicsNumber(	
+    x,	
+    topics = seq(from = 2, to = 10, by = 1),	
+    metrics = c("Griffiths2004", "CaoJuan2009", "Arun2010", "Deveaud2014"),	
+    method = "Gibbs",	
+    control = list(seed = 77),	
+    mc.cores = 2L,	
+    verbose = TRUE	 )
+
+})
+
+# para 2016 o donde más consenso hay es en 4 topics
+FindTopicsNumber_plot(n_topics[[1]])
+# para 2020 en 4
+FindTopicsNumber_plot(n_topics[[2]])
+
+```
+
+
+Para 2020, seleccionar 4 topics también parece una decisión adecuada. 
+
+```{r results= 'hide' }
+lda_2016 <- LDA(df_PP_tokens[["PP_2016"]],
+           k = 4, 
+           method = "Gibbs", 	
+           control = list(verbose=25L, 
+                          seed = 123,  
+                          burnin = 100, 
+                          iter = 500))
+lda_2020<- LDA(df_PP_tokens[["PP_2020"]],
+               k = 4, 
+               method = "Gibbs", 
+               control = list(verbose=25L, 
+                              seed = 123, 
+                              burnin = 100,
+                              iter = 500))
+```
+
+En el siguiente gráfico pueden verse las palabras más frecuentes de las 4 temáticas extraídas. La primera parece tratar sobre la legislatura saliente que inicia el nuevo gobierno del PP, y la voluntad de llevar a caso acciones positivas para las personas. En el segundo topic que hemos denominado como "Estado", las palabras arrojan un discurso centrado en los principales desafíos del país en los próximos años, de ahí palabras como Cataluña, futuro, empleo, educación o decisiones. El tercer tópico recoge las alusiones directas a los diputados y parece hacer referencia la relevancia de un día como la investidura del gobierno para España, para el país. Finalmente, el último topic da la sensación que combina desde un ataque directo a Pablo Iglesias, con los resultados obtenidos por el Partido Popular como primera fuerza. Es el topic más difuso.
+
+Por tanto, el discurso de investidura de 2016 es un discurso casi presidencial, donde el PP se centra en hablar de la legislatura y los desafíos del Estado principalmente. En el primer gráfico, este discurso estaba bastante por debajo en términos de negatividad de los de 2017 en adelante, incluso por debajo del de 2011. Se aprecia la sensación de victoria. 
+
+
+
+```{r results='hide'}
+
+require(tidytext)
+tidy(lda_2016, matrix = "beta") %>% 
+   # tras inspeccionar las palabras, renombramos
+   # los topics para darle un sentido
+  mutate( topic = factor(topic, levels = c(1,2,3,4),
+                         labels = c("Legislatura","Desafíos del país",
+                                    "Investidura","Mixto")) ) %>% 
+  group_by(topic) %>% 
+  slice_max(order_by = beta, n = 10) %>% 
+  ungroup() %>% 
+  mutate(term = reorder(term, beta)) %>% 
+  arrange(term) %>% 
+  ggplot(aes(term, beta, fill = factor(topic))) + 
+  geom_col(show.legend = FALSE) +  
+  scale_fill_ordinal(option = "E")+
+  facet_wrap(~ topic, scales = "free") +  
+  coord_flip() + 
+  theme_minimal() +
+  labs(y = "", x = "", 
+        title = "Los temas del discurso del PP en 2016",
+        subtitle = "Términos más frecuentes en cada uno de los topics:") +
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_text(face = "bold"),
+        panel.grid.major.y = element_blank(),
+        plot.title = element_text(face = "bold"),
+        strip.text = element_text(face = "bold"))
+```
+
+El discurso de 2020 cambia sustancialmente. Que sea el más negativo en términos de sentimientos y en la mayoría de emociones queda reflejado en las temáticas obtenidas. Este discurso tuvo lugar en enero de 2020 tras la repetición electoral de noviembre de 2019. Pedro Sánchez iba a ser investido apoyado por Unidas Podemos y los independentistas. 
+
+
+
+```{r }
+
+tidy(lda_2020, matrix = "beta") %>% 
+   # tras inspeccionar las palabras, renombramos
+   # los topics para darle un sentido
+  mutate( topic = factor(topic, levels = c(1,2,3,4),
+                         labels = c("Investidura","Cataluña",
+                                    "Pacto 'histórico'",
+                                    "Constitución")) ) %>% 
+  group_by(topic) %>% 
+  slice_max(order_by = beta, n = 10) %>% 
+  ungroup() %>% 
+  mutate(term = reorder(term, beta)) %>% 
+  ggplot(aes(term, beta, fill = factor(topic))) + 
+  geom_col(show.legend = FALSE) +  
+  scale_fill_ordinal(option = "E")+
+  facet_wrap(~ topic, scales = "free") +  
+  coord_flip() + 
+  theme_minimal() +
+  labs(y = "", x = "", 
+       title = "Los temas del Discurso del PP en 2020",
+       subtitle = "Términos más frecuentes en cada uno de los topics:") +
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_text(face = "bold"),
+        panel.grid.major.y = element_blank(),
+        plot.title = element_text(face = "bold"),
+        strip.text = element_text(face = "bold"))
+
+
+```
+
+
+
+El primer tópico se aprecia un discurso que critica la investidura de Sánchez y el Partido Socialista, probablemente con ataques respecto al riesgo que supone para la constitución y la democracia al necesitar de los catalanes. En esta línea, pero con mayor claridad, continua el segundo topic, con alusiones a nación, Esquerra y a los españoles. El tercero, con matices, parece referirse en concreto al pacto de investidura histórico (en tono negativo) que se estaba firmando. Y en el último, una vez más, se hace mención explícita a España, ERC, y la deriva tomada en un día como aquel. En definitiva, a diferencia del discurso de "Gobierno" anterior, este es un ataque continuo al Gobierno saliente por la misma cuestión: el pacto con los independentistas. Esto es lo que provoca el aumento de los sentimientos negativos de 2016 a 2020, ya que es un discurso plagado de ataques.
+
+Es cierto que el tono del discurso automáticamente se vuelve más negativo por el hecho de ser oposición y no estar a punto de ser investido como Gobierno. No obstante, el discurso de 2020 podía tratar una variedad de temáticas, pero se centró casi exclusivamente en la cuestión territorial por lo que hemos visto. Un eje de competición que potencia el conflicto en España desde hace una década, ya que la polarización territorial ha aumentado en los últimos años. Así pues, lo que vimos en el anterior apartado, se confirma analizando más en detalle estos dos discursos. 
+

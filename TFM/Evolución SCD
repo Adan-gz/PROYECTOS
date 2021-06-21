@@ -63,7 +63,7 @@ sur_europa %>%
   
   labs( title = "Evolución de la satisfacción media con la democracia en el Sur de Europa",
         x = "", y = "", col = "",
-        caption = "Fuente: para España y Portugal todas las rondas de la ESS. Italia: 1, 2, 6, 8, 9.  
+        caption = "Fuente: para España y Portugal todas las rondas de la ESS. Italia: 1, 2, 6, 8, 9. Grecia: 1,2,4 y 5. 
 Nota: media ponderada con peso de post-estratificación. La fecha es genérica ya que el traba-
 jo de campo varía según país. Las fechas correctas para España son las del gráfico anterior." )+
 

@@ -5,3 +5,7 @@ Analizo la **polarización** presente en todos los discursos de investidura desd
 Hasta ahora este fenómeno ha sido principalmente estudiado vía encuestas de Opinión Pública, sin embargo, como aquí se ve, la aplicación de estas técnicas también permtie detectar dicha tendencia. 
 
 He subido un documento html extraído vía Rmarkdown. En este documento se incluye el código y puede descargarse a su vez el rmd.
+
+
+![3  plot](https://user-images.githubusercontent.com/74647601/122835375-20d4e180-d2e8-11eb-815e-39caf9ae3e3c.png)
+
